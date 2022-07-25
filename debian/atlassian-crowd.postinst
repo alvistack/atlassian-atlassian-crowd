@@ -1,0 +1,12 @@
+#!/bin/bash
+
+set -euxo pipefail
+
+CROWD_CATALINA=/opt/atlassian/crowd
+
+chown -Rf crowd:crowd $CROWD_CATALINA
+chmod 0700 $CROWD_CATALINA
+
+#DEBHELPER#
+
+exit 0
