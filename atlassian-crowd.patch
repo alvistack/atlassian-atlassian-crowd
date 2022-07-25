@@ -1,0 +1,95 @@
+diff --git a/crowd/apache-tomcat/bin/setenv.sh b/crowd/apache-tomcat/bin/setenv.sh
+index 5cfceeb..ab53524 100755
+--- a/crowd/apache-tomcat/bin/setenv.sh
++++ b/crowd/apache-tomcat/bin/setenv.sh
+@@ -1,7 +1,22 @@
+-JAVA_OPTS="-Xms128m -Xmx512m -Dfile.encoding=UTF-8 $JAVA_OPTS"
++#!/bin/bash
+ 
++CROWD_HOME="/var/atlassian/application-data/crowd"
++CROWD_CATALINA="/opt/atlassian/crowd"
++
++JAVA_OPTS=" \
++-Xms1024m \
++-Xmx1024m \
++-Datlassian.plugins.enable.wait=300 \
++-XX:+UnlockExperimentalVMOptions \
++-XX:+UseCGroupMemoryLimitForHeap \
++-XX:MaxRAMFraction=1 \
++-Dfile.encoding=UTF-8 \
++"
+ export JAVA_OPTS
+ 
++CATALINA_OPTS="-Dcrowd.home=$CROWD_HOME"
++export CATALINA_OPTS
++
+ # set the location of the pid file
+ if [ -z "$CATALINA_PID" ] ; then
+     if [ -n "$CATALINA_BASE" ] ; then
+diff --git a/crowd/apache-tomcat/conf/server.xml b/crowd/apache-tomcat/conf/server.xml
+index 1ba6efb..3191157 100644
+--- a/crowd/apache-tomcat/conf/server.xml
++++ b/crowd/apache-tomcat/conf/server.xml
+@@ -16,6 +16,10 @@
+                    URIEncoding="UTF-8"
+                    compression="on"
+                    sendReasonPhrase="true"
++                   proxyName=""
++                   proxyPort=""
++                   scheme="http"
++                   secure="false"
+                    compressableMimeType="text/html,text/xml,application/xml,text/plain,text/css,application/json,application/javascript,application/x-javascript" />
+ 
+         <Engine defaultHost="localhost" name="Catalina">
+@@ -23,6 +27,9 @@
+                 <Valve className="org.apache.catalina.valves.ErrorReportValve"
+                        showReport="true"
+                        showServerInfo="false" />
++                <Context docBase="../../crowd-webapp" path="" >
++                    <Manager pathname="" />
++                </Context>
+             </Host>
+         </Engine>
+ 
+diff --git a/crowd/start_crowd.sh b/crowd/start_crowd.sh
+index f4f3c60..961d0aa 100755
+--- a/crowd/start_crowd.sh
++++ b/crowd/start_crowd.sh
+@@ -1,6 +1,19 @@
+-#!/bin/sh
+-set -e
++#!/bin/bash
+ 
++# resolve links - $0 may be a softlink
++PRG="$0"
++while [ -h "$PRG" ]; do
++    ls=`ls -ld "$PRG"`
++    link=`expr "$ls" : '.*-> \(.*\)$'`
++    if expr "$link" : '/.*' > /dev/null; then
++        PRG="$link"
++    else
++        PRG=`dirname "$PRG"`/"$link"
++    fi
++done
++PRGDIR=`dirname "$PRG"`
++
++PRGRUNMODE=false
+ if [ "$1" = "-fg" ] || [ "$1" = "run" ]  ; then
+ 	shift
+ 	PRGRUNMODE=true
+@@ -8,10 +21,8 @@ else
+ 	echo "To run Crowd in the foreground, start the server with $0 -fg"
+ fi
+ 
+-cd "`dirname "$0"`"
+-
+-if [ "$PRGRUNMODE" = "true" ] ; then
+-    exec apache-tomcat/bin/catalina.sh run "$@"
++if [ "$PRGRUNMODE" == "true" ] ; then
++    exec $PRGDIR/apache-tomcat/bin/catalina.sh run "$@"
+ else
+-    exec apache-tomcat/bin/startup.sh "$@"
+-fi
+\ No newline at end of file
++    exec $PRGDIR/apache-tomcat/bin/startup.sh "$@"
++fi
