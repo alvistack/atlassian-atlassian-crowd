@@ -1,0 +1,32 @@
+#!/bin/bash
+
+set -euxo pipefail
+
+CROWD_HOME=/var/atlassian/application-data/crowd
+
+if [ ! -d $CROWD_HOME -a ! -L $CROWD_HOME ]; then
+    mkdir -p $CROWD_HOME
+fi
+
+if ! getent group crowd >/dev/null; then
+    groupadd \
+        --system \
+        crowd
+fi
+
+if ! getent passwd crowd >/dev/null; then
+    useradd \
+        --system \
+        --gid crowd \
+        --home-dir $CROWD_HOME \
+        --no-create-home \
+        --shell /usr/sbin/nologin \
+        crowd
+fi
+
+chown -Rf crowd:crowd $CROWD_HOME
+chmod 0750 $CROWD_HOME
+
+#DEBHELPER#
+
+exit 0
