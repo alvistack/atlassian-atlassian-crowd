@@ -1,0 +1,33 @@
+#!/bin/bash
+
+set -euxo pipefail
+
+CROWD_DOWNLOAD_URL=http://product-downloads.atlassian.com/software/crowd/downloads/atlassian-crowd-5.1.5.tar.gz
+CROWD_DOWNLOAD_DEST=/tmp/atlassian-crowd-5.1.5.tar.gz
+CROWD_DOWNLOAD_CHECKSUM=7e8966dc267674939a1afb43ac809ee52ecb6bd64de58e27984ddc7fdf51bd71
+
+CROWD_CATALINA=/opt/atlassian/crowd
+CROWD_PATCH=/opt/atlassian/atlassian-crowd.patch
+
+wget -c $CROWD_DOWNLOAD_URL -O $CROWD_DOWNLOAD_DEST
+echo -n "$CROWD_DOWNLOAD_CHECKSUM $CROWD_DOWNLOAD_DEST" | sha256sum -c -
+
+rm -rf $CROWD_CATALINA
+mkdir -p $CROWD_CATALINA
+tar zxf $CROWD_DOWNLOAD_DEST -C $CROWD_CATALINA --strip-components=1
+
+cat $CROWD_PATCH | patch -p1 -d /
+chmod a+x $CROWD_CATALINA/start_crowd.sh
+chmod a+x $CROWD_CATALINA/stop_crowd.sh
+find $CROWD_CATALINA -type f -name '*.so' -exec chrpath -d {} \;
+find $CROWD_CATALINA -type f -name '*.bak' -delete
+find $CROWD_CATALINA -type f -name '*.orig' -delete
+find $CROWD_CATALINA -type f -name '*.rej' -delete
+fdupes -qnrps $CROWD_CATALINA
+
+chown -Rf crowd:crowd $CROWD_CATALINA
+chmod 0700 $CROWD_CATALINA
+
+#DEBHELPER#
+
+exit 0
