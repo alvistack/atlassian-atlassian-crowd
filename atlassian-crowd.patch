@@ -1,0 +1,134 @@
+diff --git a/opt/atlassian/crowd/apache-tomcat/bin/setenv.sh b/opt/atlassian/crowd/apache-tomcat/bin/setenv.sh
+index cd8978b..9cd12ea 100755
+--- a/opt/atlassian/crowd/apache-tomcat/bin/setenv.sh
++++ b/opt/atlassian/crowd/apache-tomcat/bin/setenv.sh
+@@ -1,8 +1,24 @@
+-JAVA_OPTS="-Xms128m -Xmx512m -Dfile.encoding=UTF-8 $JAVA_OPTS"
+-JAVA_OPTS="$JAVA_OPTS -Dorg.apache.catalina.STRICT_SERVLET_COMPLIANCE=true"
++#!/bin/bash
+ 
++CROWD_HOME="/var/atlassian/application-data/crowd"
++CROWD_CATALINA="/opt/atlassian/crowd"
++
++JAVA_OPTS="-Dfile.encoding=UTF-8 ${JAVA_OPTS}"
++JAVA_OPTS="-Xms2048m -Xmx2048m -XX:ReservedCodeCacheSize=512m ${JAVA_OPTS}"
++JAVA_OPTS="-Datlassian.plugins.enable.wait=300 -XX:+IgnoreUnrecognizedVMOptions -XX:+UnlockExperimentalVMOptions ${JAVA_OPTS}"
++JAVA_OPTS="-Dorg.apache.catalina.STRICT_SERVLET_COMPLIANCE=true ${JAVA_OPTS}"
+ export JAVA_OPTS
+ 
++CATALINA_OPTS="-Dcrowd.home=$CROWD_HOME ${CATALINA_OPTS}"
++CATALINA_OPTS="-XX:+UseZGC -XX:ZCollectionInterval=5 -XX:ZAllocationSpikeTolerance=5 -XX:+ExplicitGCInvokesConcurrent ${CATALINA_OPTS}"
++CATALINA_OPTS="-Dcrowd.catalina.connector.port=8095 ${CATALINA_OPTS}"
++CATALINA_OPTS="-Dcrowd.catalina.connector.scheme=http ${CATALINA_OPTS}"
++CATALINA_OPTS="-Dcrowd.catalina.connector.secure=false ${CATALINA_OPTS}"
++CATALINA_OPTS="-Dcrowd.catalina.connector.proxyname= ${CATALINA_OPTS}"
++CATALINA_OPTS="-Dcrowd.catalina.connector.proxyport= ${CATALINA_OPTS}"
++CATALINA_OPTS="-Dcrowd.catalina.context.path= ${CATALINA_OPTS}"
++export CATALINA_OPTS
++
+ # set the location of the pid file
+ if [ -z "$CATALINA_PID" ] ; then
+     if [ -n "$CATALINA_BASE" ] ; then
+diff --git a/opt/atlassian/crowd/apache-tomcat/conf/server.xml b/opt/atlassian/crowd/apache-tomcat/conf/server.xml
+index a6bd3b3..ae404ad 100644
+--- a/opt/atlassian/crowd/apache-tomcat/conf/server.xml
++++ b/opt/atlassian/crowd/apache-tomcat/conf/server.xml
+@@ -10,11 +10,14 @@
+                    maxHttpHeaderSize="8192"
+                    maxThreads="150"
+                    minSpareThreads="25"
+-                   port="8095"
++                   port="${crowd.catalina.connector.port}"
+                    redirectPort="8443"
+                    useBodyEncodingForURI="true"
+                    URIEncoding="UTF-8"
+                    compression="on"
++                   relaxedPathChars="[]|" relaxedQueryChars="[]|{}^&#x5c;&#x60;&quot;&lt;&gt;"
++                   scheme="${crowd.catalina.connector.scheme}" secure="${crowd.catalina.connector.secure}"
++                   proxyName="${crowd.catalina.connector.proxyname}" proxyPort="${crowd.catalina.connector.proxyport}"
+                    compressibleMimeType="text/html,text/xml,application/xml,text/plain,text/css,application/json,application/javascript,application/x-javascript" />
+ 
+         <!-- Example HTTPS connector -->
+@@ -47,6 +50,9 @@
+                 <Valve className="org.apache.catalina.valves.ErrorReportValve"
+                        showReport="false"
+                        showServerInfo="false" />
++                <Context path="${crowd.catalina.context.path}" docBase="../../crowd-webapp">
++                    <Manager pathname="" />
++                </Context>
+             </Host>
+             <!-- Enable access logging. This should produce localhost_access_logs.<date> files in the 'logs' directory. -->
+             <Valve className="org.apache.catalina.valves.AccessLogValve"
+diff --git a/opt/atlassian/crowd/apache-tomcat/conf/web.xml b/opt/atlassian/crowd/apache-tomcat/conf/web.xml
+index e1ac3ae..25838f1 100644
+--- a/opt/atlassian/crowd/apache-tomcat/conf/web.xml
++++ b/opt/atlassian/crowd/apache-tomcat/conf/web.xml
+@@ -637,7 +637,11 @@
+   <!-- created sessions by modifying the value below.                       -->
+ 
+     <session-config>
+-        <session-timeout>30</session-timeout>
++        <session-timeout>120</session-timeout>
++        <cookie-config>
++            <max-age>604800</max-age>
++        </cookie-config>
++        <tracking-mode>COOKIE</tracking-mode>
+     </session-config>
+ 
+ 
+diff --git a/opt/atlassian/crowd/crowd-webapp/WEB-INF/web.xml b/opt/atlassian/crowd/crowd-webapp/WEB-INF/web.xml
+index cba6c0f..bb5161b 100644
+--- a/opt/atlassian/crowd/crowd-webapp/WEB-INF/web.xml
++++ b/opt/atlassian/crowd/crowd-webapp/WEB-INF/web.xml
+@@ -2130,6 +2130,10 @@ End of content automatically created by Apache Tomcat JspC.
+     </jsp-config>
+ 
+     <session-config>
++        <session-timeout>120</session-timeout>
++        <cookie-config>
++            <max-age>604800</max-age>
++        </cookie-config>
+         <tracking-mode>COOKIE</tracking-mode>
+     </session-config>
+ 
+diff --git a/opt/atlassian/crowd/start_crowd.sh b/opt/atlassian/crowd/start_crowd.sh
+index 132e049..961d0aa 100755
+--- a/opt/atlassian/crowd/start_crowd.sh
++++ b/opt/atlassian/crowd/start_crowd.sh
+@@ -1,6 +1,19 @@
+ #!/bin/bash
+-set -e
+ 
++# resolve links - $0 may be a softlink
++PRG="$0"
++while [ -h "$PRG" ]; do
++    ls=`ls -ld "$PRG"`
++    link=`expr "$ls" : '.*-> \(.*\)$'`
++    if expr "$link" : '/.*' > /dev/null; then
++        PRG="$link"
++    else
++        PRG=`dirname "$PRG"`/"$link"
++    fi
++done
++PRGDIR=`dirname "$PRG"`
++
++PRGRUNMODE=false
+ if [ "$1" = "-fg" ] || [ "$1" = "run" ]  ; then
+ 	shift
+ 	PRGRUNMODE=true
+@@ -8,10 +21,8 @@ else
+ 	echo "To run Crowd in the foreground, start the server with $0 -fg"
+ fi
+ 
+-cd "`dirname "$0"`"
+-
+-if [ "$PRGRUNMODE" = "true" ] ; then
+-    exec apache-tomcat/bin/catalina.sh run "$@"
++if [ "$PRGRUNMODE" == "true" ] ; then
++    exec $PRGDIR/apache-tomcat/bin/catalina.sh run "$@"
+ else
+-    exec apache-tomcat/bin/startup.sh "$@"
+-fi
+\ No newline at end of file
++    exec $PRGDIR/apache-tomcat/bin/startup.sh "$@"
++fi

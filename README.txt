@@ -1,8 +1,8 @@
 ----------------------------------------------
-Atlassian Crowd 4.4.2
+Atlassian Crowd 5.0.1
 ----------------------------------------------
 
-Thank you for downloading Atlassian Crowd 4.4.2.
+Thank you for downloading Atlassian Crowd 5.0.1.
 
 QUICK START GUIDE
 -----------------
